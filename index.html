@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Life in Life</title>
+  <meta name="description" content="This is a test I built that simulates Conway's Game of Life within itself.">
+  <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+
+  <style>
+    body {
+      background-color: #efefef;
+    }
+
+    #canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas" width="400" height="400"></canvas>
+  <button id="start-button">Start</button>
+  <button id="random-button">Random</button>
+  <button id="clear-button">Clear</button>
+  <script>
+    // RULES
+    // 1. Any live cell with fewer than two live neighbours dies, as if by underpopulation.
+    // 2. Any live cell with two or three live neighbours lives on to the next generation.
+    // 3. Any live cell with more than three live neighbours dies, as if by overpopulation.
+    // 4. Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+
+    const canvas = document.getElementById("canvas");
+    const canvasContext = canvas.getContext("2d");
+
+    const gridRows = 20, gridColumns = 20;
+    const rowHeight = canvas.height / gridRows, columnWidth = canvas.width / gridColumns;
+
+    const stepSpeed = 100;
+
+    canvasContext.fillStyle = "#fff";
+    canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+
+    const startButton = document.getElementById("start-button");
+    let running = false;
+
+    startButton.addEventListener("click", function () {
+      if (running) {
+        running = false;
+        this.textContent = "Start";
+        stop();
+      } else {
+        running = true;
+        this.textContent = "Stop";
+        start();
+      }
+    });
+
+    const randomButton = document.getElementById("random-button");
+
+    randomButton.addEventListener("click", function () {
+      if (!running) {
+        gridState = [];
+
+        for (let y = 0; y < gridRows; y++) {
+          const row = [];
+
+          for (let x = 0; x < gridRows; x++) {
+            const randomValue = Math.round(Math.random());
+            row.push(randomValue);
+
+            canvasContext.fillStyle = randomValue === 1 ? "#000" : "#fff";
+            canvasContext.fillRect(x * columnWidth, y * rowHeight, columnWidth, rowHeight);
+          }
+
+          gridState.push(row);
+        }
+      }
+    });
+
+    const clearButton = document.getElementById("clear-button");
+
+    clearButton.addEventListener("click", function () {
+      if (!running) {
+        gridState = [];
+
+        for (let y = 0; y < gridRows; y++) {
+          const row = [];
+
+          for (let x = 0; x < gridRows; x++) {
+            row.push(0);
+          }
+
+          gridState.push(row);
+        }
+
+        canvasContext.fillStyle = "#fff";
+        canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    });
+
+    let gridState = [];
+
+    for (let y = 0; y < gridRows; y++) {
+      const row = [];
+
+      for (let x = 0; x < gridRows; x++) {
+        row.push(0);
+      }
+
+      gridState.push(row);
+    }
+
+    canvas.addEventListener("click", function (e) {
+      if (!running) {
+        const x = e.clientX - canvas.offsetLeft, y = e.clientY - canvas.offsetTop;
+        const column = Math.floor(x / 20), row = Math.floor(y / 20);
+
+        canvasContext.fillStyle = gridState[row][column] === 1 ? "#fff" : "#000";
+        canvasContext.fillRect(column * columnWidth, row * rowHeight, columnWidth, rowHeight);
+
+        gridState[row][column] = gridState[row][column] === 1 ? 0 : 1;
+      }
+    });
+
+    let interval;
+
+    const directions = [
+      { offsetX: 0, offsetY: -1 },
+      { offsetX: 1, offsetY: -1 },
+      { offsetX: 1, offsetY: 0 },
+      { offsetX: 1, offsetY: 1 },
+      { offsetX: 0, offsetY: 1 },
+      { offsetX: -1, offsetY: 1 },
+      { offsetX: -1, offsetY: 0 },
+      { offsetX: -1, offsetY: -1 }
+    ];
+
+    function start() {
+      let newGridState = copyArr(gridState);
+
+      interval = setInterval(function () {
+        for (let y = 0; y < gridRows; y++) {
+          for (let x = 0; x < gridColumns; x++) {
+            let neighbours = 0;
+
+            directions.forEach(direction => {
+              if (y + direction.offsetY >= 0 && y + direction.offsetY <= 19 && x + direction.offsetX >= 0 && x + direction.offsetX <= 19) {
+                neighbours += gridState[y + direction.offsetY][x + direction.offsetX];
+              }
+            });
+
+
+            if (gridState[y][x] === 1 && (neighbours < 2 || neighbours > 3)) newGridState[y][x] = 0;
+            if (gridState[y][x] === 0 && neighbours === 3) newGridState[y][x] = 1;
+
+            canvasContext.fillStyle = newGridState[y][x] === 1 ? "#000" : "#fff";
+            canvasContext.fillRect(x * columnWidth, y * rowHeight, columnWidth, rowHeight);
+          }
+        }
+
+        gridState = copyArr(newGridState);
+      }, stepSpeed);
+    }
+
+    function stop() {
+      clearInterval(interval);
+    }
+
+    function copyArr(arr) {
+      return arr.map(function (subArr) {
+        return subArr.slice();
+      });
+    }
+  </script>
+</body>
+
+</html>
