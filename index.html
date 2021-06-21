@@ -105,7 +105,7 @@
           }
         }
 
-        gridRows = rows;
+        gridRows = parseInt(rows);
         canvas.height = gridRows * rowHeight;
       }
 
@@ -121,7 +121,7 @@
           }
         }
 
-        gridColumns = columns;
+        gridColumns = parseInt(columns);
         canvas.width = gridColumns * columnWidth;
       }
     }
@@ -140,6 +140,7 @@
       }
     }
 
+    // Load Pattern
     function loadPattern(file) {
       const reader = new FileReader();
       reader.onload = function (e) {
@@ -241,25 +242,31 @@
 
     function startSimulation() {
       interval = setInterval(function () {
-        let newGrid = Object.assign(Object.create(Object.getPrototypeOf(grid)), grid);
+        let newGrid = new Grid();
 
         for (let y = 0; y < gridRows; y++) {
           for (let x = 0; x < gridColumns; x++) {
             let neighbours = 0;
 
             directions.forEach(direction => {
-              if (y + direction.offsetY >= 0 && y + direction.offsetY <= 19 && x + direction.offsetX >= 0 && x + direction.offsetX <= 19) {
+              if (y + direction.offsetY >= 0 && y + direction.offsetY <= gridRows - 1 && x + direction.offsetX >= 0 && x + direction.offsetX <= gridColumns - 1) {
                 neighbours += grid.state[y + direction.offsetY][x + direction.offsetX];
               }
             });
 
+            if (grid.state[y][x] === 1) {
+              if (neighbours < 2 || neighbours > 3) {
+                newGrid.state[y][x] = 0;
+              } else {
+                newGrid.state[y][x] = 1;
+              }
+            }
 
-            if (grid.state[y][x] === 1 && (neighbours < 2 || neighbours > 3)) newGrid.state[y][x] = 0;
             if (grid.state[y][x] === 0 && neighbours === 3) newGrid.state[y][x] = 1;
           }
         }
 
-        gridState = Object.assign(Object.create(Object.getPrototypeOf(newGrid)), newGrid);
+        grid = newGrid;
         drawGrid();
       }, stepSpeed);
     }
