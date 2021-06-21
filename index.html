@@ -2,8 +2,8 @@
 <html lang="en">
 
 <head>
-  <title>Life in Life</title>
-  <meta name="description" content="This is a test I built that simulates Conway's Game of Life within itself.">
+  <title>Life</title>
+  <meta name="description" content="A simple browser implementation of Conway's Game of Life.">
   <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
@@ -11,120 +11,222 @@
   <style>
     body {
       background-color: #efefef;
+      color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     }
 
     #canvas {
       display: block;
     }
+
+    button,
+    input[type="file"] {
+      font-family: inherit;
+    }
+
+    menu {
+      padding-inline-start: 0;
+    }
+
+    menu button {
+      padding: 0;
+    }
+
+    a,
+    .link-button {
+      background-color: transparent;
+      border: none;
+      color: blue;
+      cursor: pointer;
+      text-decoration: underline;
+    }
   </style>
 </head>
 
 <body>
-  <canvas id="canvas" width="400" height="400"></canvas>
+  <h1>Life</h1>
   <button id="start-button">Start</button>
   <button id="random-button">Random</button>
   <button id="clear-button">Clear</button>
+  <form>
+    <label for="column-input">Columns</label>
+    <input type="number" id="column-input">
+    <label for="row-input">Rows</label>
+    <input type="number" id="row-input">
+  </form>
+  <canvas id="canvas"></canvas>
+  <form id="upload-form">
+    <input type="file" id="file-input" accept=".rle,.mc">
+    <button type="submit">Load</button>
+  </form>
+  <h3>Load Example Patterns</h3>
+  <menu id="example-patterns">
+    <li><button class="link-button" data-src="koks-galaxy.rle">Kok's Galaxy</button></li>
+    <li><button class="link-button" data-src="life-in-life.mc">Life in Life</button></li>
+  </menu>
   <script>
-    // RULES
-    // 1. Any live cell with fewer than two live neighbours dies, as if by underpopulation.
-    // 2. Any live cell with two or three live neighbours lives on to the next generation.
-    // 3. Any live cell with more than three live neighbours dies, as if by overpopulation.
-    // 4. Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+    // Grid Class
+    class Grid {
+      constructor() {
+        this.setGridValues(0);
+      }
 
+      setGridValues(value) {
+        this.state = [];
+
+        for (let y = 0; y < gridRows; y++) {
+          const row = [];
+
+          for (let x = 0; x < gridColumns; x++) {
+            if (typeof value === "function") {
+              row.push(value());
+            } else {
+              row.push(value);
+            }
+          }
+
+          this.state.push(row);
+        }
+      }
+
+      adjustRows(rows) {
+        if (rows < gridRows) {
+          this.state = this.state.slice(0, rows);
+        }
+        if (rows > gridRows) {
+          for (let y = gridRows; y < rows; y++) {
+            const row = [];
+
+            for (let x = 0; x < gridColumns; x++) {
+              row.push(0);
+            }
+
+            this.state.push(row);
+          }
+        }
+
+        gridRows = rows;
+        canvas.height = gridRows * rowHeight;
+      }
+
+      adjustColumns(columns) {
+        if (columns < gridColumns) {
+          for (let x = gridColumns; x > columns; x--) {
+            this.state.forEach((row) => row.pop());
+          }
+        }
+        if (columns > gridColumns) {
+          for (let x = gridColumns; x < columns; x++) {
+            this.state.forEach((row) => row.push(0));
+          }
+        }
+
+        gridColumns = columns;
+        canvas.width = gridColumns * columnWidth;
+      }
+    }
+
+    // Draw Grid Function
+    function drawGrid() {
+      canvasContext.fillStyle = "#fff";
+      canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+
+      canvasContext.fillStyle = "#000";
+
+      for (let y = 0; y < gridRows; y++) {
+        for (let x = 0; x < gridColumns; x++) {
+          if (grid.state[y][x]) canvasContext.fillRect(x * columnWidth, y * rowHeight, columnWidth, rowHeight);
+        }
+      }
+    }
+
+    function loadPattern(file) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        console.log(e.target.result);
+      };
+      reader.readAsText(file);
+    }
+
+    // Initialize DOM Elements
     const canvas = document.getElementById("canvas");
+    const startButton = document.getElementById("start-button"), randomButton = document.getElementById("random-button"), clearButton = document.getElementById("clear-button");
+    const columnInput = document.getElementById("column-input"), rowInput = document.getElementById("row-input");
+    const fileInput = document.getElementById("file-input");
+    const uploadForm = document.getElementById("upload-form");
+    const examplePatterns = document.getElementById("example-patterns");
+
+    // Get Canvas Context
     const canvasContext = canvas.getContext("2d");
 
-    const gridRows = 20, gridColumns = 20;
-    const rowHeight = canvas.height / gridRows, columnWidth = canvas.width / gridColumns;
+    // Sizing Canvas
+    let gridRows = 20, gridColumns = 20;
+    let rowHeight, columnWidth;
+    rowHeight = columnWidth = 20;
 
+    columnInput.value = gridColumns;
+    rowInput.value = gridRows;
+
+    canvas.width = gridColumns * columnWidth;
+    canvas.height = gridRows * rowHeight;
+
+    // Create Grid State
+    let grid = new Grid();
+
+    // Draw initial screen
+    drawGrid();
+
+    // Resize Canvas
+    columnInput.addEventListener("change", (e) => {
+      grid.adjustColumns(e.target.value);
+      drawGrid();
+    });
+    rowInput.addEventListener("change", (e) => {
+      grid.adjustRows(e.target.value);
+      drawGrid();
+    });
+
+    // Draw on Grid
+    canvas.addEventListener("click", function (e) {
+      if (!running) {
+        const x = e.clientX - canvas.offsetLeft, y = e.clientY - canvas.offsetTop;
+        const column = Math.floor(x / columnWidth), row = Math.floor(y / rowHeight);
+
+        grid.state[row][column] = grid.state[row][column] ? 0 : 1;
+        drawGrid();
+      }
+    });
+
+    // Load Pattern
+    uploadForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      loadPattern(fileInput.files[0]);
+    });
+
+    // Load Example Patterns
+    for (let i = 0; i < examplePatterns.children.length; i++) {
+      examplePatterns.children[i].firstChild.addEventListener("click", async function (e) {
+        const url = examplePatterns.children[i].firstChild.dataset.src;
+        await fetch(url).then(response => response.blob()).then(file => loadPattern(file));
+      });
+    }
+
+    // Start / Stop Simulation
     const stepSpeed = 100;
-
-    canvasContext.fillStyle = "#fff";
-    canvasContext.fillRect(0, 0, canvas.width, canvas.height);
-
-    const startButton = document.getElementById("start-button");
     let running = false;
+    let interval;
 
     startButton.addEventListener("click", function () {
       if (running) {
         running = false;
         this.textContent = "Start";
-        stop();
+        clearInterval(interval);
       } else {
         running = true;
         this.textContent = "Stop";
-        start();
+        startSimulation();
       }
     });
-
-    const randomButton = document.getElementById("random-button");
-
-    randomButton.addEventListener("click", function () {
-      if (!running) {
-        gridState = [];
-
-        for (let y = 0; y < gridRows; y++) {
-          const row = [];
-
-          for (let x = 0; x < gridRows; x++) {
-            const randomValue = Math.round(Math.random());
-            row.push(randomValue);
-
-            canvasContext.fillStyle = randomValue === 1 ? "#000" : "#fff";
-            canvasContext.fillRect(x * columnWidth, y * rowHeight, columnWidth, rowHeight);
-          }
-
-          gridState.push(row);
-        }
-      }
-    });
-
-    const clearButton = document.getElementById("clear-button");
-
-    clearButton.addEventListener("click", function () {
-      if (!running) {
-        gridState = [];
-
-        for (let y = 0; y < gridRows; y++) {
-          const row = [];
-
-          for (let x = 0; x < gridRows; x++) {
-            row.push(0);
-          }
-
-          gridState.push(row);
-        }
-
-        canvasContext.fillStyle = "#fff";
-        canvasContext.fillRect(0, 0, canvas.width, canvas.height);
-      }
-    });
-
-    let gridState = [];
-
-    for (let y = 0; y < gridRows; y++) {
-      const row = [];
-
-      for (let x = 0; x < gridRows; x++) {
-        row.push(0);
-      }
-
-      gridState.push(row);
-    }
-
-    canvas.addEventListener("click", function (e) {
-      if (!running) {
-        const x = e.clientX - canvas.offsetLeft, y = e.clientY - canvas.offsetTop;
-        const column = Math.floor(x / 20), row = Math.floor(y / 20);
-
-        canvasContext.fillStyle = gridState[row][column] === 1 ? "#fff" : "#000";
-        canvasContext.fillRect(column * columnWidth, row * rowHeight, columnWidth, rowHeight);
-
-        gridState[row][column] = gridState[row][column] === 1 ? 0 : 1;
-      }
-    });
-
-    let interval;
 
     const directions = [
       { offsetX: 0, offsetY: -1 },
@@ -137,42 +239,46 @@
       { offsetX: -1, offsetY: -1 }
     ];
 
-    function start() {
-      let newGridState = copyArr(gridState);
-
+    function startSimulation() {
       interval = setInterval(function () {
+        let newGrid = Object.assign(Object.create(Object.getPrototypeOf(grid)), grid);
+
         for (let y = 0; y < gridRows; y++) {
           for (let x = 0; x < gridColumns; x++) {
             let neighbours = 0;
 
             directions.forEach(direction => {
               if (y + direction.offsetY >= 0 && y + direction.offsetY <= 19 && x + direction.offsetX >= 0 && x + direction.offsetX <= 19) {
-                neighbours += gridState[y + direction.offsetY][x + direction.offsetX];
+                neighbours += grid.state[y + direction.offsetY][x + direction.offsetX];
               }
             });
 
 
-            if (gridState[y][x] === 1 && (neighbours < 2 || neighbours > 3)) newGridState[y][x] = 0;
-            if (gridState[y][x] === 0 && neighbours === 3) newGridState[y][x] = 1;
-
-            canvasContext.fillStyle = newGridState[y][x] === 1 ? "#000" : "#fff";
-            canvasContext.fillRect(x * columnWidth, y * rowHeight, columnWidth, rowHeight);
+            if (grid.state[y][x] === 1 && (neighbours < 2 || neighbours > 3)) newGrid.state[y][x] = 0;
+            if (grid.state[y][x] === 0 && neighbours === 3) newGrid.state[y][x] = 1;
           }
         }
 
-        gridState = copyArr(newGridState);
+        gridState = Object.assign(Object.create(Object.getPrototypeOf(newGrid)), newGrid);
+        drawGrid();
       }, stepSpeed);
     }
 
-    function stop() {
-      clearInterval(interval);
-    }
+    // Generate Random Pattern
+    randomButton.addEventListener("click", function () {
+      if (!running) {
+        grid.setGridValues(() => Math.round(Math.random()));
+        drawGrid();
+      }
+    });
 
-    function copyArr(arr) {
-      return arr.map(function (subArr) {
-        return subArr.slice();
-      });
-    }
+    // Clear Grid
+    clearButton.addEventListener("click", function () {
+      if (!running) {
+        grid.setGridValues(0);
+        drawGrid();
+      }
+    });
   </script>
 </body>
 
