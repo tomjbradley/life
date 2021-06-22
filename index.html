@@ -62,7 +62,6 @@
   <h3>Load Example Patterns</h3>
   <menu id="example-patterns">
     <li><button class="link-button" data-src="koks-galaxy.rle">Kok's Galaxy</button></li>
-    <li><button class="link-button" data-src="life-in-life.mc">Life in Life</button></li>
   </menu>
   <script>
     // Grid Class
@@ -144,7 +143,71 @@
     function loadPattern(file) {
       const reader = new FileReader();
       reader.onload = function (e) {
-        console.log(e.target.result);
+        grid.setGridValues(0);
+
+        const fileContent = e.target.result;
+        const extension = file.name.split('.').pop();
+
+        const lines = fileContent.split("\n");
+
+        if (extension === "rle") {
+          const rleData = lines.find((line) => line.startsWith("x"));
+          const width = parseInt(rleData.split(",")[0].split("=")[1].replace(/\s+/g, ''));
+          const height = parseInt(rleData.split(",")[1].split("=")[1].replace(/\s+/g, ''));
+          const rule = rleData.split(",")[2].split("=")[1].replace(/\s+/g, '');
+
+          grid.adjustColumns(width);
+          columnInput.value = width;
+          grid.adjustRows(height);
+          rowInput.value = height;
+
+          const rlePatternData = lines.filter((line) => !line.replace(/\s+/g, '').startsWith("x") && !line.replace(/\s+/g, '').startsWith("x=") && !line.replace(/\s+/g, '').startsWith("#")).join().replace(/[!,/\r]/g, "");
+          let columns = rlePatternData.split("$");
+
+          columns = columns.map((column) => {
+            let str = "";
+
+            column.split("").forEach((char, index) => {
+              if (!isNaN(char)) {
+                for (let i = 0; i < parseInt(char) - 1; i++) {
+                  str += column[index + 1];
+                }
+              } else {
+                str += char;
+              }
+            });
+
+            if (str.length < height) {
+              for (let i = str.length; i < height; i++) {
+                str += "b";
+              }
+            }
+
+            str = str.replaceAll("b", "0").replaceAll("o", "1");
+            str = str.split("").map(char => parseInt(char));
+
+            return str;
+          });
+
+          let newGridState = [];
+
+          for (let y = 0; y < height; y++) {
+            let row = [];
+
+            for (let x = 0; x < width; x++) {
+              row.push(columns[x][y]);
+            }
+
+            newGridState.push(row);
+          }
+
+          grid.state = newGridState;
+
+          drawGrid();
+        }
+
+        if (extension === "mc") {
+        }
       };
       reader.readAsText(file);
     }
@@ -201,14 +264,20 @@
     // Load Pattern
     uploadForm.addEventListener("submit", function (e) {
       e.preventDefault();
-      loadPattern(fileInput.files[0]);
+      if (!running) {
+        loadPattern(fileInput.files[0]);
+      }
     });
 
     // Load Example Patterns
     for (let i = 0; i < examplePatterns.children.length; i++) {
       examplePatterns.children[i].firstChild.addEventListener("click", async function (e) {
-        const url = examplePatterns.children[i].firstChild.dataset.src;
-        await fetch(url).then(response => response.blob()).then(file => loadPattern(file));
+        if (!running) {
+          const url = examplePatterns.children[i].firstChild.dataset.src;
+          const blob = await fetch(url).then(response => response.blob());
+          const file = new File([blob], url);
+          loadPattern(file);
+        }
       });
     }
 
